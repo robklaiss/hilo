@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test User Registration</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"],
+        input[type="email"],
+        input[type="password"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #2c3e50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #1a252f;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test User Registration</h1>
+    
+    <div id="auth-forms">
+        <div class="form-group">
+        <label for="name">Name:</label>
+        <input type="text" id="name" value="Test User">
+    </div>
+    
+    <div class="form-group">
+        <label for="email">Email:</label>
+        <input type="email" id="email" value="test@example.com">
+    </div>
+    
+    <div class="form-group">
+        <label for="password">Password:</label>
+        <input type="password" id="password" value="password123">
+    </div>
+    
+    <div class="form-group">
+        <button id="register-btn">Register</button>
+        <button id="login-btn">Login</button>
+    </div>
+</div>
+    
+    <div id="result" class="result" style="display: none;"></div>
+
+    <div id="logout-section" style="display: none; margin-top: 20px;">
+        <p>You are logged in.</p>
+        <button id="logout-btn">Logout</button>
+        <button id="setup-2fa-btn" style="display: none; margin-left: 10px;">Set Up 2FA</button>
+        <button id="get-me-btn" style="margin-left: 10px;">Get My Info</button>
+    </div>
+
+    <div id="2fa-section" style="display: none; margin-top: 20px;">
+        <div class="form-group">
+            <label for="2fa-token-input">2FA Token:</label>
+            <input type="text" id="2fa-token-input" placeholder="Enter 6-digit code">
+        </div>
+        <div class="form-group">
+            <button id="verify-2fa-btn">Verify 2FA</button>
+        </div>
+    </div>
+
+    <div id="2fa-setup-section" style="display: none; margin-top: 20px;">
+        <h2>Set Up Two-Factor Authentication</h2>
+        <div class="form-group">
+            <p>Scan the QR code with your authenticator app:</p>
+            <img id="qr-code-img" src="" alt="QR Code" style="display: none; max-width: 200px; margin-bottom: 10px;">
+            <p>Or, manually enter this secret:</p>
+            <p id="2fa-secret-text" style="font-weight: bold;"></p>
+        </div>
+        <div class="form-group">
+            <label for="2fa-setup-token-input">Enter 6-digit code from authenticator:</label>
+            <input type="text" id="2fa-setup-token-input" placeholder="Enter 6-digit code">
+        </div>
+        <div class="form-group">
+            <button id="verify-2fa-setup-btn">Verify 2FA Setup</button>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE_URL = 'http://localhost:5001/api/v1/auth';
+        let currentTempToken = null; // To store the temp token for 2FA verification
+        const authForms = document.getElementById('auth-forms');
+        const twoFaSection = document.getElementById('2fa-section');
+        const logoutSection = document.getElementById('logout-section');
+        const twoFaSetupSection = document.getElementById('2fa-setup-section'); // New section
+        const setup2faBtn = document.getElementById('setup-2fa-btn');
+        const verify2faSetupBtn = document.getElementById('verify-2fa-setup-btn');
+        const qrCodeImg = document.getElementById('qr-code-img');
+        const twoFaSecretText = document.getElementById('2fa-secret-text');
+        const getMeBtn = document.getElementById('get-me-btn'); // New button
+        const resultDiv = document.getElementById('result');
+        
+        document.getElementById('register-btn').addEventListener('click', async () => {
+            const name = document.getElementById('name').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            
+            if (!name || !email || !password) {
+                showResult('Please fill in all fields', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ name, email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.message || 'Registration failed');
+                }
+                
+                localStorage.setItem('authToken', data.token);
+                localStorage.setItem('is2FAEnabledForUser', data.is2FAEnabled);
+                updateLoginState(); // Update UI to logged-in state
+                showResult(`User registered successfully! You are now logged in. 2FA Status: ${data.is2FAEnabled ? 'Enabled' : 'Not Set Up'}`, 'success');
+                console.log('Registration successful:', data);
+            } catch (error) {
+                console.error('Registration error:', error);
+                showResult(`Error: ${error.message}`, 'error');
+            }
+        });
+        
+        document.getElementById('login-btn').addEventListener('click', async () => {
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            
+            if (!email || !password) {
+                showResult('Please provide both email and password', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || data.message || 'Login failed');
+                }
+                
+                if (data.requires2FA) {
+                    currentTempToken = data.tempToken;
+                    document.getElementById('2fa-token-input').value = ''; // Clear previous token
+                    document.getElementById('2fa-section').style.display = 'block';
+                    showResult(`2FA required. Please enter the code from your authenticator app. Temp token (for reference): ${data.tempToken}`, 'success');
+                    console.log('2FA required:', data);
+                } else {
+                    localStorage.setItem('authToken', data.token);
+                    localStorage.setItem('is2FAEnabledForUser', data.is2FAEnabled); // Store 2FA status
+                    updateLoginState(); // Update UI to logged-in state
+                    showResult(`Login successful! 2FA Status: ${data.is2FAEnabled ? 'Enabled' : 'Not Set Up'}`, 'success');
+                    console.log('Login successful:', data);
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                showResult(`Error: ${error.message}`, 'error');
+            }
+        });
+        
+        function showResult(message, type) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.textContent = message;
+            resultDiv.className = `result ${type}`;
+            resultDiv.style.display = 'block';
+        }
+
+        function updateLoginState() {
+            const token = localStorage.getItem('authToken');
+            const is2FAEnabledForCurrentUser = localStorage.getItem('is2FAEnabledForUser') === 'true';
+
+            if (token) {
+                authForms.style.display = 'none';
+                twoFaSection.style.display = 'none'; // Hide 2FA login verification section
+                twoFaSetupSection.style.display = 'none'; // Ensure setup section is hidden initially by updateLoginState
+                logoutSection.style.display = 'block';
+
+                if (is2FAEnabledForCurrentUser) {
+                    setup2faBtn.style.display = 'none';
+                } else {
+                    setup2faBtn.style.display = 'inline-block'; // Show if logged in and 2FA not set up
+                }
+            } else {
+                authForms.style.display = 'block';
+                logoutSection.style.display = 'none';
+                twoFaSection.style.display = 'none'; // Ensure 2FA section is hidden on logout
+                resultDiv.style.display = 'none'; // Clear result message on logout
+            }
+        }
+
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('is2FAEnabledForUser'); // Clear 2FA status on logout
+            updateLoginState();
+            showResult('You have been logged out.', 'success');
+        });
+
+        getMeBtn.addEventListener('click', async () => {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                showResult('You must be logged in to get your info.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/me`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || data.message || 'Failed to fetch user info.');
+                }
+
+                const userInfo = data.data;
+                showResult(`User Info: Name: ${userInfo.name}, Email: ${userInfo.email}, 2FA Enabled: ${userInfo.is2FAEnabled}, ID: ${userInfo._id}`, 'success');
+                console.log('Get Me successful:', data);
+            } catch (error) {
+                console.error('Get Me Error:', error);
+                showResult(`Error: ${error.message}`, 'error');
+            }
+        });
+
+        setup2faBtn.addEventListener('click', async () => {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                showResult('You must be logged in to set up 2FA.', 'error');
+                return;
+            }
+            try {
+                const response = await fetch(`${API_BASE_URL}/2fa/setup`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.message || 'Failed to start 2FA setup.');
+                }
+
+                qrCodeImg.src = data.data.qrCodeUrl;
+                qrCodeImg.style.display = 'block';
+                twoFaSecretText.textContent = data.data.secret;
+                twoFaSetupSection.style.display = 'block';
+                logoutSection.style.display = 'none'; // Hide the main logout section while setting up 2FA
+                showResult('Scan QR or use secret, then enter code below.', 'success');
+            } catch (error) {
+                console.error('2FA Setup Start Error:', error);
+                showResult(`Error: ${error.message}`, 'error');
+            }
+        });
+
+        verify2faSetupBtn.addEventListener('click', async () => {
+            const token2FASetup = document.getElementById('2fa-setup-token-input').value.trim();
+            const authToken = localStorage.getItem('authToken');
+
+            if (!token2FASetup) {
+                showResult('Please enter the 6-digit code from your authenticator.', 'error');
+                return;
+            }
+            if (!authToken) {
+                showResult('Authentication error. Please log in again.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/2fa/verify`, { // This is POST /api/v1/auth/2fa/verify
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ token: token2FASetup })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || data.message || 'Failed to verify 2FA setup.');
+                }
+
+                localStorage.setItem('is2FAEnabledForUser', 'true');
+                document.getElementById('2fa-setup-token-input').value = ''; // Clear input
+                updateLoginState(); // This will hide setup section and setup button, show logout section
+                showResult('2FA has been successfully enabled!', 'success');
+            } catch (error) {
+                console.error('2FA Setup Verify Error:', error);
+                showResult(`Error: ${error.message}`, 'error');
+            }
+        });
+
+        document.getElementById('verify-2fa-btn').addEventListener('click', async () => {
+            const token2FA = document.getElementById('2fa-token-input').value.trim();
+
+            if (!token2FA) {
+                showResult('Please enter the 2FA token', 'error');
+                return;
+            }
+
+            if (!currentTempToken) {
+                showResult('No temporary token found. Please login again.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/verify-2fa`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ token: token2FA, tempToken: currentTempToken })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || data.message || '2FA verification failed');
+                }
+
+                localStorage.setItem('authToken', data.token);
+                updateLoginState(); // Update UI to logged-in state
+                showResult(`2FA verification successful! Final Token: ${data.token}`, 'success');
+                console.log('2FA verification successful:', data);
+                currentTempToken = null; // Clear temp token
+            } catch (error) {
+                console.error('2FA verification error:', error);
+                showResult(`Error: ${error.message}`, 'error');
+            }
+        });
+    </script>
+</body>
+</html>
