@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2FA Test Interface</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #2c3e50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #1a252f;
+        }
+        .hidden {
+            display: none;
+        }
+        .error {
+            color: #e74c3c;
+            margin-top: 10px;
+        }
+        .success {
+            color: #27ae60;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>2FA Test Interface</h1>
+        <div id="status">Status: Not logged in</div>
+        
+        <!-- Login Form -->
+        <div id="login-form">
+            <h2>Login</h2>
+            <div class="form-group">
+                <label for="email">Email:</label>
+                <input type="text" id="email" placeholder="Enter your email">
+            </div>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" placeholder="Enter your password">
+            </div>
+            <button id="login-btn">Login</button>
+            <div id="login-error" class="error"></div>
+        </div>
+
+        <!-- 2FA Setup Form (initially hidden) -->
+        <div id="twofa-setup-form" class="hidden">
+            <h2>Set Up Two-Factor Authentication</h2>
+            <p>Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.):</p>
+            <div id="qrcode-container" class="form-group">
+                <img id="qrcode" src="" alt="QR Code">
+                <p>Or enter this secret key manually: <code id="twofa-secret"></code></p>
+            </div>
+            <div class="form-group">
+                <label for="setup-twofa-code">Enter the 6-digit code from your authenticator app:</label>
+                <input type="text" id="setup-twofa-code" placeholder="Enter 6-digit code" maxlength="6">
+            </div>
+            <button id="setup-2fa-btn">Verify & Enable 2FA</button>
+            <div id="setup-twofa-error" class="error"></div>
+        </div>
+
+        <!-- 2FA Verification Form (initially hidden) -->
+        <div id="twofa-verify-form" class="hidden">
+            <h2>Two-Factor Authentication</h2>
+            <p>Please enter the 2FA code from your authenticator app:</p>
+            <div class="form-group">
+                <label for="verify-twofa-code">2FA Code:</label>
+                <input type="text" id="verify-twofa-code" placeholder="Enter 6-digit code" maxlength="6">
+            </div>
+            <button id="verify-2fa-btn">Verify</button>
+            <div id="verify-twofa-error" class="error"></div>
+        </div>
+
+        <!-- Result (initially hidden) -->
+        <div id="result" class="hidden">
+            <h2>Authentication Successful!</h2>
+            <p>Your JWT token:</p>
+            <pre id="jwt-token"></pre>
+            <p>Token data:</p>
+            <pre id="token-data"></pre>
+            <div class="form-group">
+                <button id="setup-2fa-link">Set Up 2FA</button>
+            </div>
+            
+            <!-- Manage 2FA Section -->
+            <div id="manage-2fa-section" class="hidden">
+                <h3>Manage 2FA</h3>
+                <button id="disable-2fa-btn">Disable 2FA</button>
+                <div id="disable-2fa-prompt" class="hidden form-group">
+                    <label for="disable-2fa-password">Enter your current password to disable 2FA:</label>
+                    <input type="password" id="disable-2fa-password" placeholder="Current Password">
+                    <button id="confirm-disable-2fa-btn">Confirm Disable</button>
+                    <div id="disable-2fa-error" class="error"></div>
+                    <div id="disable-2fa-success" class="success"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Base URL for the API - update this to match your backend URL
+        const API_BASE_URL = 'http://localhost:5001/api/v1/auth'; // Updated to match backend route prefix
+        let pending2FAToken = ''; // Stores the temporary token when 2FA is required for login
+        let finalAuthToken = ''; // Stores the final JWT token after successful login (with or without 2FA)
+
+        // DOM Elements
+        const loginForm = document.getElementById('login-form');
+        const twoFaSetupForm = document.getElementById('twofa-setup-form');
+        const twoFaVerifyForm = document.getElementById('twofa-verify-form');
+        const resultDiv = document.getElementById('result');
+        const loginBtn = document.getElementById('login-btn');
+        const setup2faBtn = document.getElementById('setup-2fa-btn');
+        const verify2faBtn = document.getElementById('verify-2fa-btn');
+        const loginError = document.getElementById('login-error');
+        const setup2faError = document.getElementById('setup-twofa-error');
+        const verify2faError = document.getElementById('verify-twofa-error');
+        const statusElement = document.getElementById('status');
+        const qrCodeImg = document.getElementById('qrcode');
+        const twoFaSecret = document.getElementById('twofa-secret');
+
+        // DOM Elements for Disable 2FA
+        const manage2FASection = document.getElementById('manage-2fa-section');
+        const disable2FABtn = document.getElementById('disable-2fa-btn');
+        const disable2FAPrompt = document.getElementById('disable-2fa-prompt');
+        const confirmDisable2FABtn = document.getElementById('confirm-disable-2fa-btn');
+        const disable2FAPasswordInput = document.getElementById('disable-2fa-password');
+        const disable2FAError = document.getElementById('disable-2fa-error');
+        const disable2FASuccess = document.getElementById('disable-2fa-success');
+
+        // Event Listeners
+        loginBtn.addEventListener('click', handleLogin);
+        
+        // Setup 2FA button
+        if (setup2faBtn) {
+            setup2faBtn.addEventListener('click', handle2FASetup);
+        } else {
+            console.error('Setup 2FA button not found');
+        }
+        
+        // Verify 2FA button (for login)
+        if (verify2faBtn) {
+            verify2faBtn.addEventListener('click', handle2FAVerification);
+        } else {
+            console.error('Verify 2FA button not found');
+        }
+        
+        // 2FA setup link (in success message)
+        const setup2FALink = document.getElementById('setup-2fa-link');
+        if (setup2FALink) {
+            setup2FALink.addEventListener('click', (e) => {
+                e.preventDefault();
+                console.log('2FA setup link clicked');
+                start2FASetup();
+            });
+        } else {
+            console.error('2FA setup link not found');
+        }
+
+        // Event Listeners for Disable 2FA
+        if(disable2FABtn) {
+            disable2FABtn.addEventListener('click', () => {
+                if(disable2FAPrompt) disable2FAPrompt.classList.remove('hidden');
+                if(disable2FASuccess) disable2FASuccess.textContent = ''; // Clear previous success message
+                if(disable2FAError) disable2FAError.textContent = ''; // Clear previous error
+                if(disable2FAPasswordInput) disable2FAPasswordInput.value = ''; // Clear password field
+                if(disable2FAPasswordInput) disable2FAPasswordInput.focus();
+            });
+        }
+
+        if(confirmDisable2FABtn) {
+            confirmDisable2FABtn.addEventListener('click', handleDisable2FA);
+        }
+        
+        // Auto-submit 2FA code when 6 digits are entered
+        document.getElementById('verify-twofa-code')?.addEventListener('input', (e) => {
+            if (e.target.value.length === 6) {
+                handle2FAVerification();
+            }
+        });
+        
+        document.getElementById('setup-twofa-code')?.addEventListener('input', (e) => {
+            if (e.target.value.length === 6) {
+                handle2FASetup();
+            }
+        });
+
+        // Helper function to manage form visibility
+        function showForm(formIdToShow) {
+            const forms = ['login-form', 'twofa-setup-form', 'twofa-verify-form', 'result'];
+            forms.forEach(formId => {
+                const formElement = document.getElementById(formId);
+                if (formElement) {
+                    if (formId === formIdToShow) {
+                        formElement.classList.remove('hidden');
+                    } else {
+                        formElement.classList.add('hidden');
+                    }
+                }
+            });
+        }
+
+        // Handle login
+        async function handleLogin() {
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+
+            if (!email || !password) {
+                showError(loginError, 'Please enter both email and password');
+                return;
+            }
+
+            try {
+                updateStatus('Logging in...');
+                console.log('Sending login request for email:', email);
+                
+                const response = await fetch(`${API_BASE_URL}/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+                console.log('Login response:', { status: response.status, data });
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Login failed');
+                }
+
+                if (data.requires2FA) {
+                    console.log('2FA required, showing verification form');
+                    // Show 2FA verification form
+                    pending2FAToken = data.tempToken;
+                    // finalAuthToken should not be set here, only pending2FAToken
+                    
+                    // Hide other forms and show verification form
+                    showForm('twofa-verify-form');
+                    
+                    document.getElementById('verify-twofa-code').focus();
+                    updateStatus('2FA verification required');
+                } else if (data.token) {
+                    console.log('Login successful, no 2FA required');
+                    // No 2FA required, show success
+                    finalAuthToken = data.token; // Store the JWT token
+                    showSuccess(data.token);
+                    updateStatus('Logged in (2FA not enabled)');
+                }
+            } catch (error) {
+                updateStatus('Login failed');
+                showError(loginError, error.message || 'Login failed. Please try again.');
+            }
+        }
+
+        // Start 2FA setup process
+        async function start2FASetup() {
+            try {
+                console.log('Starting 2FA setup...');
+                updateStatus('Setting up 2FA...');
+                
+                if (!finalAuthToken) {
+                    const errorMsg = 'Not authenticated. Please log in again.';
+                    console.error(errorMsg);
+                    throw new Error(errorMsg);
+                }
+                
+                console.log('Sending 2FA setup request with token:', {
+                    hasAuthToken: !!finalAuthToken,
+                    tokenLength: finalAuthToken.length
+                });
+                
+                const response = await fetch(`${API_BASE_URL}/2fa/setup`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${finalAuthToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                console.log('Setup response status:', response.status);
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error('2FA setup failed:', errorData);
+                    throw new Error(errorData.message || 'Failed to start 2FA setup');
+                }
+
+                const data = await response.json();
+                console.log('2FA setup response:', data);
+
+                if (!data.data || !data.data.qrCodeUrl) {
+                    throw new Error('Invalid response: Missing QR code URL');
+                }
+
+                // Show QR code and setup form
+                qrCodeImg.src = data.data.qrCodeUrl;
+                twoFaSecret.textContent = data.data.secret;
+                
+                // Hide other forms and show setup form
+                showForm('twofa-setup-form');
+                
+                // Clear any previous errors
+                setup2faError.textContent = '';
+                
+                // Focus the input field
+                document.getElementById('setup-twofa-code').focus();
+                updateStatus('Scan the QR code with your authenticator app');
+                
+            } catch (error) {
+                console.error('2FA setup error:', error);
+                updateStatus('2FA setup failed');
+                showError(setup2faError, error.message || 'Failed to start 2FA setup');
+            }
+        }
+
+        // Handle 2FA setup verification
+        async function handle2FASetup() {
+            const code = document.getElementById('setup-twofa-code').value.trim();
+            
+            console.log('Verifying 2FA setup with code:', code);
+
+            // Clear previous errors
+            setup2faError.textContent = '';
+
+            // Validate input
+            if (!code || code.length !== 6 || !/^\d+$/.test(code)) {
+                const errorMsg = 'Please enter a valid 6-digit code';
+                console.error(errorMsg);
+                showError(setup2faError, errorMsg);
+                return;
+            }
+            
+            // Check authentication
+            if (!finalAuthToken) {
+                const errorMsg = 'Session expired. Please log in again.';
+                console.error(errorMsg);
+                showError(setup2faError, errorMsg);
+                return;
+            }
+
+            try {
+                updateStatus('Verifying 2FA setup...');
+                
+                console.log('Sending 2FA verification request with token:', {
+                    code: code,
+                    hasAuthToken: !!finalAuthToken,
+                    tokenLength: finalAuthToken ? finalAuthToken.length : 0
+                });
+
+                const response = await fetch(`${API_BASE_URL}/2fa/verify`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${finalAuthToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ token: code })
+                });
+
+
+                console.log('Verification response status:', response.status);
+                
+                // Handle non-OK responses
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({
+                        message: 'Failed to parse error response'
+                    }));
+                    console.error('2FA verification failed:', errorData);
+                    throw new Error(errorData.message || '2FA setup verification failed');
+                }
+
+                const data = await response.json();
+                console.log('2FA verification successful:', data);
+
+                // 2FA setup successful
+                showForm('result');
+                
+                // Update UI
+                updateStatus('2FA enabled successfully!');
+                
+                // Hide the setup link since 2FA is now enabled
+                const setupLink = document.getElementById('setup-2fa-link');
+                if (setupLink) {
+                    setupLink.style.display = 'none';
+                }
+                
+                // Show success message
+                const successMsg = document.createElement('div');
+                successMsg.className = 'success';
+                successMsg.textContent = '2FA has been successfully enabled for your account. ';
+                
+                // Add a login button to get a new token with 2FA
+                const loginAgainBtn = document.createElement('button');
+                loginAgainBtn.textContent = 'Login Again';
+                loginAgainBtn.onclick = () => {
+                    window.location.reload();
+                };
+                
+                successMsg.appendChild(document.createElement('br'));
+                successMsg.appendChild(document.createTextNode('Please log in again. Your new 2FA setting will be active on your next login.'));
+                successMsg.appendChild(document.createElement('br'));
+                successMsg.appendChild(loginAgainBtn);
+                
+                // Clear the result div and add the success message
+                resultDiv.innerHTML = '<h2>2FA Setup Complete</h2>';
+                resultDiv.appendChild(successMsg);
+                
+                // Clear sensitive data
+                document.getElementById('setup-twofa-code').value = '';
+                
+            } catch (error) {
+                updateStatus('2FA setup failed');
+                showError(setup2faError, error.message || 'Failed to verify 2FA setup');
+            }
+        }
+
+        // Handle 2FA verification during login
+        async function handle2FAVerification() {
+            const code = document.getElementById('verify-twofa-code').value.trim();
+            
+            console.log('Verifying 2FA login with code:', code);
+
+            // Clear previous errors
+            verify2faError.textContent = '';
+
+            // Validate input
+            if (!code || code.length !== 6 || !/^\d+$/.test(code)) {
+                const errorMsg = 'Please enter a valid 6-digit code';
+                console.error(errorMsg);
+                showError(verify2faError, errorMsg);
+                return;
+            }
+
+            try {
+                updateStatus('Verifying 2FA code...');
+                
+                if (!pending2FAToken) {
+                    const errorMsg = 'Session expired. Please log in again.';
+                    console.error(errorMsg);
+                    throw new Error(errorMsg);
+                }
+                
+                console.log('Sending 2FA verification request with temp token:', {
+                    hasTempToken: !!pending2FAToken,
+                    tokenLength: pending2FAToken.length,
+                    code: code
+                });
+
+                const response = await fetch(`${API_BASE_URL}/verify-2fa`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        token: code,
+                        tempToken: pending2FAToken
+                    })
+                });
+
+                console.log('2FA verification response status:', response.status);
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({
+                        message: 'Failed to parse error response'
+                    }));
+                    console.error('2FA verification failed:', errorData);
+                    throw new Error(errorData.message || '2FA verification failed');
+                }
+
+                const data = await response.json();
+                console.log('2FA verification successful:', data);
+
+                if (!data.token) {
+                    throw new Error('No token received from server');
+                }
+
+                // 2FA verification successful
+                finalAuthToken = data.token;
+                
+                // Update UI
+                // showSuccess will call showForm('result')
+                showSuccess(data.token);
+                updateStatus('Logged in with 2FA');
+                
+                // Clear sensitive data
+                document.getElementById('verify-twofa-code').value = '';
+                
+            } catch (error) {
+                console.error('2FA verification error:', error);
+                updateStatus('2FA verification failed');
+                
+                // Enhanced error message with more details if available
+                const errorMessage = error.response 
+                    ? `Error: ${error.message || '2FA verification failed'}\n` +
+                      `Status: ${error.status || 'Unknown'}\n` +
+                      `${JSON.stringify(error.response, null, 2)}`
+                    : error.message || 'Failed to verify 2FA code';
+                
+                showError(verify2faError, errorMessage);
+                
+                // Focus the input field for easy retry
+                document.getElementById('verify-twofa-code').focus();
+            }
+        }
+
+        // Handle Disable 2FA
+        async function handleDisable2FA() {
+            const password = disable2FAPasswordInput.value;
+            if (!password) {
+                showError(disable2FAError, 'Password is required.');
+                return;
+            }
+
+            if (!finalAuthToken) {
+                showError(disable2FAError, 'You are not logged in.');
+                return;
+            }
+
+            try {
+                updateStatus('Disabling 2FA...');
+                disable2FAError.textContent = '';
+                disable2FASuccess.textContent = '';
+
+                const response = await fetch(`${API_BASE_URL}/2fa/disable`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${finalAuthToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ password })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Failed to disable 2FA.');
+                }
+
+                updateStatus('2FA Disabled');
+                disable2FASuccess.textContent = '2FA has been successfully disabled. You will not be prompted for a 2FA code on your next login.';
+                disable2FAPrompt.classList.add('hidden');
+                if(manage2FASection) manage2FASection.classList.add('hidden');
+                
+                // Update the "Set Up 2FA" link visibility in the main result area
+                const setup2faLink = document.getElementById('setup-2fa-link');
+                if (setup2faLink) {
+                    setup2faLink.style.display = 'block'; // Show "Set Up 2FA" again
+                }
+
+            } catch (error) {
+                updateStatus('Failed to disable 2FA');
+                showError(disable2FAError, error.message || 'An error occurred.');
+            }
+        }
+
+        // Show success with JWT token
+        function showSuccess(token) {
+            showForm('result'); // Centralized form display
+            
+            // Store the token for authenticated requests (using finalAuthToken is preferred)
+            // window.token = token; // This global assignment can be removed if finalAuthToken is used consistently
+            
+            // Display the JWT token
+            document.getElementById('jwt-token').textContent = token;
+            
+            // Try to decode and display token data (for demo purposes)
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                document.getElementById('token-data').textContent = JSON.stringify(payload, null, 2);
+                
+                // Show 2FA setup button if not already enabled
+                const setup2faLink = document.getElementById('setup-2fa-link');
+                const manage2faSectionElement = document.getElementById('manage-2fa-section');
+
+                if (payload.is2FAEnabled) {
+                    if (setup2faLink) setup2faLink.style.display = 'none';
+                    if (manage2faSectionElement) manage2faSectionElement.classList.remove('hidden');
+                    if (disable2FAPrompt) disable2FAPrompt.classList.add('hidden'); // Ensure prompt is hidden initially
+                } else {
+                    if (setup2faLink) setup2faLink.style.display = 'block';
+                    if (manage2faSectionElement) manage2faSectionElement.classList.add('hidden');
+                }
+            } catch (e) {
+                console.error('Error decoding token:', e);
+                document.getElementById('token-data').textContent = 'Could not decode token';
+            }
+        }
+
+        // Show error message
+        function showError(element, message, response) {
+            if (element) {
+                let errorMessage = message;
+                
+                // Add server response details if available
+                if (response) {
+                    try {
+                        if (response.message) {
+                            errorMessage += `: ${response.message}`;
+                        }
+                        if (response.error) {
+                            errorMessage += `\n${response.error}`;
+                        }
+                    } catch (e) {
+                        console.error('Error parsing error response:', e);
+                    }
+                }
+                
+                element.textContent = errorMessage;
+                element.style.whiteSpace = 'pre-wrap'; // Allow line breaks
+                console.error('Error:', errorMessage, response || '');
+                
+                setTimeout(() => {
+                    if (element) {
+                        element.textContent = '';
+                        element.style.whiteSpace = 'normal';
+                    }
+                }, 10000); // Show errors for 10 seconds
+            } else {
+                console.error('Error element not found:', message, response || '');
+            }
+        }
+        
+        // Update status message
+        function updateStatus(message) {
+            if (statusElement) {
+                statusElement.textContent = `Status: ${message}`;
+            }
+        }
+
+    </script>
+</body>
+</html>

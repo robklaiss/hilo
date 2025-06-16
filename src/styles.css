@@ -1,0 +1,326 @@
+/* Estilos Globales y Variables CSS */
+:root {
+  --primary-color: #000000; /* Color primario */
+  --secondary-color: #3498db; /* Color secundario */
+  --background-color: #f4f7f6; /* Un fondo claro y neutro */
+  --text-color: #333333;
+  --card-background: #ffffff;
+  --line-color: #000000;
+  --spacing-unit: 8px;
+  --card-width: 300px;
+  --page-margin: 15px;
+  --card-separator-line-height: 4px;
+  --card-spacing: 30px;
+}
+
+html, body, #root {
+  height: 100%; /* Ensure #root can fill the viewport */
+  margin: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh; /* Fallback for browsers not supporting height: 100% on #root well */
+  /* position: relative; removed as line is now on body::before */
+}
+
+/* Line is now on body::before, so #root::before is removed */
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+:root {
+  /* Light Theme (Default) */
+  --background-color: #ffffff;
+  --text-color: #000000;
+  --primary-color: #000000; /* From memory */
+  --secondary-color: #3498db; /* From memory */
+  --line-color: #000000; /* Existing line color */
+  --card-background: #f9f9f9;
+  --header-background: transparent;
+  /* Theme switcher button (light theme - button is black, text white, says 'Negro') */
+  --button-text-color: var(--background-color); /* White text */
+  --button-background-color: #000000; /* Black background */
+  --button-border-color: #000000; /* Black border */
+
+  /* Spacing */
+  --spacing-unit: 8px; /* From memory */
+  --page-margin: calc(var(--spacing-unit) * 3); /* 24px */
+  --card-spacing: 30px;
+  --card-separator-line-height: 4px;
+}
+
+.theme-dark {
+  --background-color: #000000; /* Pure black background */
+  --text-color: #f4f7f6; /* Light grey/white text */
+  --primary-color: #ecf0f1; /* Light text for dark theme */
+  --secondary-color: #3498db; /* Accent color */
+  --line-color: #ffffff; /* White line color for dark theme */
+  --card-background: #000000; /* Pure black card background */
+  --header-background: #000000; /* Pure black header */
+  --card-text-color: #cccccc; /* Lighter grey for card text in dark mode */
+  /* Theme switcher button (dark theme - button is white, text black, says 'Blanco') */
+  --button-text-color: var(--background-color); /* Black text */
+  --button-background-color: var(--text-color); /* White background */
+  --button-border-color: var(--text-color); /* White border */
+}
+
+body {
+  background-color: var(--background-color);
+  color: var(--text-color);
+  font-family: sans-serif;
+  margin: 0;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.app-container {
+  max-width: 1200px; /* O el ancho máximo que prefieras para el contenido */
+  margin: 0 auto;
+  /* Add padding-top to account for fixed header height. Header has 30px margin + ~40px logo height + 30px margin = ~100px. Adjust as needed. */
+  padding: 155px calc(var(--spacing-unit) * 2) calc(var(--spacing-unit) * 2);
+  position: relative; /* For the continuous line */
+  flex-grow: 1; /* Allow app-container to take available vertical space */
+  display: flex; /* Use flex to manage children like index-page */
+  flex-direction: column;
+}
+
+/* Line is now on #root::before, so this is removed from .app-container */
+
+/* Estilos para la Página de Índice (Tapas) */
+.index-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* Centra las tarjetas si el contenedor es más ancho */
+  padding: var(--card-spacing) var(--page-margin) var(--page-margin); /* Adjusted top padding for the initial line */
+  /* gap: var(--card-spacing); */ /* Removed gap, spacing handled by separators */
+  position: relative; /* For positioning the ::before pseudo-element */
+  z-index: 2; /* To be above the header */
+  flex-grow: 1;
+}
+
+.tapa-card-wrapper {
+  /* Este wrapper ayuda a manejar la línea y el espacio */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: var(--card-spacing); /* Add space between cards */
+}
+
+.tapa-card-link {
+  display: block; /* Make the link a block element to contain the card */
+  text-decoration: none; /* Remove underline from link */
+  color: inherit; /* Inherit text color, card content will define actual colors */
+}
+
+.tapa-card {
+  background-color: var(--card-background);
+  width: var(--card-width);
+  /* La altura será determinada por el contenido, o puedes fijarla */
+  /* min-height: 400px; */ /* Ejemplo de altura mínima */
+  padding: calc(var(--spacing-unit) * 2);
+  border: 4px solid var(--line-color); /* 4px solid border using theme color */
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1); /* Sombra suave */
+  text-align: center;
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+  cursor: pointer; /* Indicate the whole card is clickable */
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* Vertically centers the content */
+}
+
+.tapa-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+}
+
+.tapa-card h2 {
+  color: var(--primary-color);
+  margin-top: 0;
+  margin-bottom: 0px;
+}
+
+.tapa-card p {
+  font-size: 0.9rem;
+  color: var(--card-text-color, #555); /* Use --card-text-color with fallback to #555 */
+  margin-top: 5px;
+  margin-bottom: 5px;
+}
+
+/* Old .tapa-card a styles removed as the link is now the whole card */
+
+/* .card-separator rule removed as it's no longer needed */
+
+/* Estilos para los Conjuntos de Sliders (Swiper) */
+.slider-set-page {
+  padding: var(--page-margin);
+  position: relative; /* Ensure z-index works */
+  z-index: 2; /* To be above the header normally */
+  /* Default styles for desktop */
+}
+
+.close-fullscreen-slider-btn {
+  display: none; /* Hidden by default, shown only on mobile fullscreen */
+  position: absolute; /* Will be fixed relative to viewport in fullscreen mode */
+  top: 15px;
+  right: 15px;
+  background: rgba(0,0,0,0.5);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  font-size: 24px;
+  line-height: 40px;
+  text-align: center;
+  cursor: pointer;
+  z-index: 1002; /* Above fullscreen slider content */
+  transition: background-color 0.2s ease;
+}
+
+.close-fullscreen-slider-btn:hover {
+  background: rgba(0,0,0,0.7);
+}
+
+/* Media Query for Mobile Fullscreen Slider */
+@media (max-width: 767px) {
+  .slider-set-page.fullscreen-mobile {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: var(--primary-color); /* Or var(--background-color) or a specific dark color */
+    z-index: 1001; /* Above everything else */
+    padding: 0; /* Remove padding in fullscreen */
+    overflow: hidden; /* Prevent scrollbars on the page itself */
+  }
+
+  .slider-set-page.fullscreen-mobile .close-fullscreen-slider-btn {
+    display: block; /* Show the button */
+    position: fixed; /* Fixed to viewport */
+  }
+
+  .slider-set-page.fullscreen-mobile nav {
+    display: none; /* Hide the 'Volver al Índice' link */
+  }
+  
+  .slider-set-page.fullscreen-mobile h2 {
+    display: none; /* Optionally hide the title in fullscreen */
+  }
+
+  .slider-set-page.fullscreen-mobile .swiper-container {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .slider-set-page.fullscreen-mobile .swiper-slide {
+    min-height: 100%; /* Make slides take full height */
+    background-color: var(--primary-color); /* Match fullscreen background */
+    border: none;
+    /* You might want to adjust slide content styling for fullscreen */
+  }
+}
+
+.swiper-container {
+  width: 100%;
+  /* max-width: 800px; */ /* O el ancho que prefieras para tus sliders */
+  margin: 20px auto;
+  background: var(--card-background);
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.swiper-slide {
+  text-align: center;
+  font-size: 18px;
+  background: #fff;
+
+  /* Center slide text vertically */
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-box-pack: center;
+  -ms-flex-pack: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+  -webkit-box-align: center;
+  -ms-flex-align: center;
+  -webkit-align-items: center;
+  align-items: center;
+  min-height: 300px; /* Altura de ejemplo para los slides */
+  background-color: var(--secondary-color);
+  color: white;
+}
+
+.swiper-slide img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Styles for the footer element */
+footer {
+  /* The user's footer has inline styles for text-align, margin-top, padding, border-top. */
+  /* We add flex-shrink to ensure it's not squashed by flex layout. */
+  flex-shrink: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 767px) {
+  .app-container {
+    padding-top: 160px; /* Header height (~115px) + extra space (45px) */
+    padding-left: 0;
+    padding-right: 0;
+    margin-left: 0;
+    margin-right: 0;
+    max-width: 100%; /* Allow content to span full width */
+    width: 100%; /* Ensure full width */
+    /* margin: 0 auto; will now ensure it's full width if not constrained by parent */
+  }
+
+  /* Para móvil, las tarjetas podrían ocupar más ancho si se desea, */
+  /* pero la especificación es mantener 300px. */
+  /* Si quisieras que ocuparan todo el ancho menos márgenes: */
+  /*
+  .tapa-card,
+  .card-separator {
+    width: calc(100% - (2 * var(--page-margin)));
+  }
+  */
+}
+
+/* Older media query, ensure the new one is distinct or merged if same breakpoint */
+@media (max-width: 768px) {
+  /* Para móvil, las tarjetas podrían ocupar más ancho si se desea, */
+  /* pero la especificación es mantener 300px. */
+  /* Si quisieras que ocuparan todo el ancho menos márgenes: */
+  /*
+  .tapa-card,
+  .card-separator {
+    width: calc(100% - (2 * var(--page-margin)));
+  }
+  */
+}
